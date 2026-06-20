@@ -2,6 +2,11 @@
 
 All notable changes to the LedgerProof TypeScript SDK. The format adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.2 — 2026-06-19
+
+### Changed — release engineering (no code or API changes)
+First release published from the public `ledgerproof-sdk-js` repository via CI **trusted publishing** (OIDC), carrying npm **build provenance**. The cryptographic implementation is byte-for-byte identical to 1.1.1 (Ed25519 via the Cure53-audited `@noble/curves`; SHA-256 via `@noble/hashes`) — this release exists solely to attach verifiable provenance, which npm generates only for builds from a public source repository.
+
 ## 1.1.1 — 2026-06-18
 
 ### Changed — audited Ed25519 implementation

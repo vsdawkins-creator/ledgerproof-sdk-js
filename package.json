@@ -1,6 +1,6 @@
 {
   "name": "@ledgerproof/sdk",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "EU AI Act Article 50 cryptographic transparency receipts, anchored to Bitcoin. The TypeScript SDK with the Stripe-style attach() pattern.",
   "type": "module",
   "main": "./dist/index.cjs",
