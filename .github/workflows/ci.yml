@@ -1,0 +1,35 @@
+name: CI
+
+# Build + type-check + the SDK test suite on every push to main and every PR,
+# across the Node versions the SDK supports (engines: node >= 18).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: build + test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["18", "20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Type-check
+        run: npm run lint
+      - name: Build (ESM + CJS + d.ts)
+        run: npm run build
+      - name: Test
+        run: npm test
