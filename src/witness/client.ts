@@ -18,7 +18,7 @@ import {
   type WitnessEnvelope,
 } from "./envelope.js";
 
-const DEFAULT_API_BASE = "https://api-eu.ledgerproofhq.io";
+const DEFAULT_API_BASE = "https://api.ledgerproofhq.io";
 const HEX64 = /^[0-9a-f]{64}$/;
 
 export interface BitcoinTip {

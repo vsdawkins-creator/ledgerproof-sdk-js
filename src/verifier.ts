@@ -14,7 +14,7 @@ export interface VerifierOptions {
   fetch?: typeof fetch;
 }
 
-export const DEFAULT_API_BASE = "https://api-eu.ledgerproofhq.io";
+export const DEFAULT_API_BASE = "https://api.ledgerproofhq.io";
 
 /** Verify a receipt by sequence number. Returns the entry, or null if 404. */
 export async function verifyReceipt(

@@ -25,7 +25,7 @@ import type {
   Receipt,
 } from "./types.js";
 
-export const DEFAULT_API_BASE = "https://api-eu.ledgerproofhq.io";
+export const DEFAULT_API_BASE = "https://api.ledgerproofhq.io";
 const GENESIS_PREV_HASH = "0".repeat(64);
 const TIP_PROBE_LIMIT = 10_000;
 

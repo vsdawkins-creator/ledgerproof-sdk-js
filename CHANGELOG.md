@@ -2,6 +2,11 @@
 
 All notable changes to the LedgerProof TypeScript SDK. The format adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.3 — 2026-06-22
+
+### Fixed — default API endpoint (P0: zero-config calls were failing)
+`DEFAULT_API_BASE` is repointed from `https://api-eu.ledgerproofhq.io` to the healthy `https://api.ledgerproofhq.io` in the client, witness client, and verifier. The previous EU default host is currently unreachable (its Fly app is suspended), so every default-configured SDK call was failing with a connection reset. Callers can still target any endpoint via the `apiBase` option or the `LEDGERPROOF_API_BASE` environment variable. No protocol, signing, or wire-format changes — the cryptographic path is byte-identical to 1.1.2.
+
 ## 1.1.2 — 2026-06-19
 
 ### Changed — release engineering (no code or API changes)
