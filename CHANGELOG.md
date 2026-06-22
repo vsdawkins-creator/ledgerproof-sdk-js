@@ -2,6 +2,17 @@
 
 All notable changes to the LedgerProof TypeScript SDK. The format adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.4 — 2026-06-22
+
+### Fixed — OP_RETURN witness check now length-discriminates the on-chain layouts
+`locateRootInOpReturn` (the on-chain anchor witness used by `checkBitcoinOpReturn`) now branches on the exact OP_RETURN byte length and only compares the root at the slot(s) that layout defines, instead of checking a fixed set of offsets across every length:
+
+- **44 bytes** — `MAGIC{LPR1\|QE20} \|\| seq_start \|\| seq_end \|\| root` → root at offset **12** (the format of every anchor currently on-chain).
+- **68 bytes** — `LPR1 \|\| legacy_root \|\| scitt_root` → roots at offsets **4** and **36** (the combined SCITT layout).
+- **36 bytes** — `LPR1 \|\| root` → root at offset **4** (single-root window).
+
+Previously the offset-12 slot was checked on all lengths; on a 68-byte combined payload that slot straddles `legacy_root[8..32] \|\| scitt_root[0..8]` and could match a crafted value — a false-positive surface. Length-gating removes it. The legacy `QE20` magic is now accepted only on the 44-byte layout (the SCITT pipeline never used it). Behaviour for every real anchor on-chain is unchanged; this hardens forward-compatibility for the combined-anchor rollout. 69/69 tests pass, including new false-positive regressions.
+
 ## 1.1.3 — 2026-06-22
 
 ### Fixed — default API endpoint (P0: zero-config calls were failing)

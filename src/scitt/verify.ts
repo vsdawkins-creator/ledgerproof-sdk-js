@@ -19,12 +19,16 @@ import * as cbor from "./cbor.js";
 import { CborMap } from "./cbor.js";
 import { decodeCoseSign1, verifyCoseSign1, type CoseSign1 } from "./cose.js";
 import {
+  ANCHOR_SEQ_ROOT_OFFSET,
   BITCOIN_OP_RETURN_PREFIX,
   BITCOIN_OP_RETURN_PREFIX_LEN,
   CODE_POINTS,
   COSE_HEADER,
   DEFAULT_MEMPOOL_API,
+  LEGACY_ANCHOR_PREFIX,
+  LEGACY_ROOT_OFFSET,
   ROOT_LEN,
+  SCITT_ROOT_OFFSET,
   VDP_INCLUSION_LABEL,
   type CodePoints,
 } from "./constants.js";
@@ -283,38 +287,44 @@ export async function checkBitcoinOpReturn(
 }
 
 /**
- * Locate a 32-byte `root` inside the data of a LedgerProof OP_RETURN, supporting
- * both the legacy (`LPR1 || root`) and combined (`LPR1 || legacy_root ||
- * scitt_root`) layouts (spec §6).
+ * Locate a 32-byte `root` inside the data of a LedgerProof OP_RETURN, LENGTH-
+ * DISCRIMINATING the known on-chain layouts (spec §6, LPR-VER-001).
  *
- * Returns true iff:
- *   1. `data` starts with the 4-byte `LPR1` prefix, and
- *   2. `root` appears at a recognized 32-byte-aligned slot after the prefix —
- *      i.e. offset 4 (legacy root) or offset 36 (SCITT root in the combined
- *      layout). Matching is restricted to these slots (rather than a free
- *      substring search) so the prefix framing is enforced and a stray 32-byte
- *      window cannot produce a false positive.
- *
- * The function is layout-version-aware via the prefix, so a future `LPR2` layout
- * would be rejected here until explicitly supported.
+ * The byte length selects the layout, and the root is only compared at the slot(s)
+ * that layout actually defines — slots are NOT bled across lengths, so a value
+ * straddling two roots (or sitting mid-root) cannot produce a false positive:
+ *   - 44 bytes: `MAGIC{LPR1|QE20} || seq_start || seq_end || root`  → root@12 only
+ *   - 68 bytes: `LPR1 || legacy_root || scitt_root`                 → roots@4 and @36
+ *   - 36 bytes: `LPR1 || root`                                      → root@4 only
+ * Other lengths, and the legacy `QE20` magic on the 68/36 SCITT layouts, are
+ * rejected. A future `LPR2` layout is rejected until explicitly supported.
  */
 export function locateRootInOpReturn(data: Uint8Array, root: Uint8Array): boolean {
   if (root.length !== ROOT_LEN) return false;
-  const prefix = new TextEncoder().encode(BITCOIN_OP_RETURN_PREFIX);
   if (data.length < BITCOIN_OP_RETURN_PREFIX_LEN) return false;
-  // Enforce the LPR1 framing.
-  for (let i = 0; i < prefix.length; i++) {
-    if (data[i] !== prefix[i]) return false;
+  const magic = String.fromCharCode(
+    ...data.subarray(0, BITCOIN_OP_RETURN_PREFIX_LEN)
+  );
+  // Branch on the exact byte length; pick the root slot(s) that length defines.
+  let slots: number[];
+  if (data.length === 44) {
+    // Deployed legacy: accept LPR1 (v1.0+) or legacy QE20 (pre-v1); root after the seq bounds.
+    if (magic !== BITCOIN_OP_RETURN_PREFIX && magic !== LEGACY_ANCHOR_PREFIX) return false;
+    slots = [ANCHOR_SEQ_ROOT_OFFSET];
+  } else if (data.length === 68) {
+    // Combined SCITT — LPR1 only (the SCITT pipeline never used the QE20 tag).
+    if (magic !== BITCOIN_OP_RETURN_PREFIX) return false;
+    slots = [LEGACY_ROOT_OFFSET, SCITT_ROOT_OFFSET];
+  } else if (data.length === 36) {
+    if (magic !== BITCOIN_OP_RETURN_PREFIX) return false;
+    slots = [LEGACY_ROOT_OFFSET];
+  } else {
+    return false;
   }
-  // Check each recognized 32-byte slot after the prefix (offset 4, 36, …) up to
-  // the end of the data. This covers `LPR1||root` (one slot) and
-  // `LPR1||legacy||scitt` (two slots) without a free-floating search.
-  for (
-    let off = BITCOIN_OP_RETURN_PREFIX_LEN;
-    off + ROOT_LEN <= data.length;
-    off += ROOT_LEN
-  ) {
-    if (bytesEqual(data.subarray(off, off + ROOT_LEN), root)) return true;
+  for (const off of slots) {
+    if (bytesEqual(data.subarray(off, off + ROOT_LEN), root)) {
+      return true;
+    }
   }
   return false;
 }

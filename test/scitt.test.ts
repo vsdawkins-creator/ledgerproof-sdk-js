@@ -53,10 +53,12 @@ import {
   verifyTransparentStatement,
 } from "../src/scitt/verify.js";
 import {
+  ANCHOR_SEQ_ROOT_OFFSET,
   BITCOIN_OP_RETURN_PREFIX,
   CODE_POINTS,
   COSE_HEADER,
   CWT_CLAIM,
+  LEGACY_ANCHOR_PREFIX,
   LEGACY_ROOT_OFFSET,
   ROOT_LEN,
   SCITT_ROOT_OFFSET,
@@ -788,6 +790,99 @@ describe("locateRootInOpReturn (combined OP_RETURN, spec §6)", () => {
     expect(locateRootInOpReturn(data, sha256(new Uint8Array([0x99])))).toBe(false);
     expect(locateRootInOpReturn(data, new Uint8Array(31))).toBe(false);
     expect(locateRootInOpReturn(new Uint8Array(2), scittRoot)).toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// locateRootInOpReturn — DEPLOYED 44-byte worker layout + legacy QE20 magic
+// (MAGIC || seq_start || seq_end || root); the format actually on-chain.
+// ════════════════════════════════════════════════════════════════════════════
+describe("locateRootInOpReturn (44-byte anchor-worker layout + QE20 legacy)", () => {
+  const root = sha256(new Uint8Array([0x07]));
+  // 44-byte payload: 4-byte magic + seq_start(u32 BE) + seq_end(u32 BE) + 32-byte root.
+  const build = (magic: string, seqStart: number, seqEnd: number) => {
+    const seq = (n: number) => {
+      const b = new Uint8Array(4);
+      new DataView(b.buffer).setUint32(0, n, false); // big-endian
+      return b;
+    };
+    return cbor.concatBytes(
+      new TextEncoder().encode(magic),
+      seq(seqStart),
+      seq(seqEnd),
+      root
+    );
+  };
+
+  it("exposes the worker root offset (12) and legacy magic", () => {
+    expect(ANCHOR_SEQ_ROOT_OFFSET).toBe(12);
+    expect(LEGACY_ANCHOR_PREFIX).toBe("QE20");
+  });
+
+  it("locates the root in the LPR1 44-byte worker layout (offset 12)", () => {
+    const data = build("LPR1", 0, 17);
+    expect(data.length).toBe(44);
+    expect(locateRootInOpReturn(data, root)).toBe(true);
+  });
+
+  it("locates the root in the legacy QE20 44-byte layout (offset 12)", () => {
+    const data = build("QE20", 12, 30);
+    expect(data.length).toBe(44);
+    expect(locateRootInOpReturn(data, root)).toBe(true);
+  });
+
+  it("rejects an unknown magic even with a correctly-placed root", () => {
+    const data = build("XXXX", 0, 1);
+    expect(locateRootInOpReturn(data, root)).toBe(false);
+  });
+
+  it("does not produce a false positive when the root is absent", () => {
+    const data = build("LPR1", 0, 1);
+    expect(locateRootInOpReturn(data, sha256(new Uint8Array([0x42])))).toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// locateRootInOpReturn — LENGTH DISCRIMINATION (slots must not bleed across layouts)
+// ════════════════════════════════════════════════════════════════════════════
+describe("locateRootInOpReturn (length discrimination, no cross-layout slot bleed)", () => {
+  const legacyRoot = sha256(new Uint8Array([0x01]));
+  const scittRoot = sha256(new Uint8Array([0x02]));
+  const lpr1 = () => new TextEncoder().encode(BITCOIN_OP_RETURN_PREFIX);
+
+  it("on a 68-byte combined payload, the 32-byte window AT OFFSET 12 must NOT match", () => {
+    // offset 12 is a root boundary ONLY in the 44-byte layout. In the 68-byte
+    // combined payload it straddles legacy_root[8..32]||scitt_root[0..8]; matching
+    // a crafted value there would be a false positive (the audit's check b).
+    const data = cbor.concatBytes(lpr1(), legacyRoot, scittRoot); // 68 bytes
+    const windowAt12 = data.subarray(12, 44); // the straddling 32-byte window
+    expect(windowAt12.length).toBe(32);
+    expect(locateRootInOpReturn(data, windowAt12)).toBe(false); // length-gated to {4,36}
+    // ...but the real roots at 4 and 36 still match.
+    expect(locateRootInOpReturn(data, legacyRoot)).toBe(true);
+    expect(locateRootInOpReturn(data, scittRoot)).toBe(true);
+  });
+
+  it("the 44-byte layout matches only at offset 12, not 4 or 36", () => {
+    const seq = (n: number) => {
+      const b = new Uint8Array(4);
+      new DataView(b.buffer).setUint32(0, n, false);
+      return b;
+    };
+    const data = cbor.concatBytes(lpr1(), seq(0), seq(1), legacyRoot); // 44 bytes, root@12
+    expect(data.length).toBe(44);
+    expect(locateRootInOpReturn(data, legacyRoot)).toBe(true);
+    // The bytes at offset 4 (the seq fields) must not be mistaken for a root slot.
+    const windowAt4 = data.subarray(4, 36);
+    expect(locateRootInOpReturn(data, windowAt4)).toBe(false);
+  });
+
+  it("rejects unrecognized payload lengths outright", () => {
+    for (const extra of [10, 46, 64]) {
+      const data = cbor.concatBytes(lpr1(), legacyRoot, new Uint8Array(extra)); // 36+extra, none of 36/44/68
+      expect([44, 68, 36]).not.toContain(data.length);
+      expect(locateRootInOpReturn(data, legacyRoot)).toBe(false);
+    }
   });
 });
 

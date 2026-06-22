@@ -83,15 +83,28 @@ export const PROFILE = {
 /**
  * 4-byte magic prefixing the root(s) in the Bitcoin OP_RETURN (spec §6).
  *
- * Two on-wire layouts share this prefix (the verifier accepts either):
- *   - Legacy / SCITT-disabled:  `LPR1 || root`                  (4 + 32  = 36 B)
+ * Known on-wire layouts sharing this prefix (the verifier accepts all of them):
+ *   - Deployed anchor worker:   `LPR1 || seq_start(4) || seq_end(4) || root`
+ *                                                               (4 + 8 + 32 = 44 B) — root at offset 12
+ *   - Legacy / SCITT-disabled:  `LPR1 || root`                  (4 + 32  = 36 B) — root at offset 4
  *   - Combined (SCITT enabled): `LPR1 || legacy_root || scitt_root`
- *                                                               (4 + 32 + 32 = 68 B)
- * The combined layout commits BOTH the legacy daily root and the SCITT daily
- * root in a SINGLE transaction, well within the 80-byte OP_RETURN limit. See
- * {@link SCITT_ROOT_OFFSET} for where the SCITT root sits in the combined form.
+ *                                                               (4 + 32 + 32 = 68 B) — roots at offset 4 and 36
+ * The 44-byte form is what the production anchor worker actually writes (it adds
+ * the sequence range covered by the batch). The combined layout commits BOTH the
+ * legacy daily root and the SCITT daily root in a SINGLE transaction, well within
+ * the 80-byte OP_RETURN limit. See the *_ROOT_OFFSET constants below.
+ *
+ * The legacy `QE20` magic (pre-v1 forensic anchors) shares the 44-byte layout and
+ * is accepted alongside `LPR1` per LPR-VER-001's OP_RETURN tag policy.
  */
 export const BITCOIN_OP_RETURN_PREFIX = "LPR1";
+
+/**
+ * Legacy 4-byte magic for pre-v1 forensic anchors (May 2026). Shares the 44-byte
+ * `MAGIC || seq_start || seq_end || root` layout with {@link BITCOIN_OP_RETURN_PREFIX};
+ * verifiers accept both so the full on-chain history verifies (LPR-VER-001).
+ */
+export const LEGACY_ANCHOR_PREFIX = "QE20";
 
 /** Byte length of the {@link BITCOIN_OP_RETURN_PREFIX} ("LPR1"). */
 export const BITCOIN_OP_RETURN_PREFIX_LEN = 4;
@@ -110,6 +123,13 @@ export const LEGACY_ROOT_OFFSET = BITCOIN_OP_RETURN_PREFIX_LEN; // 4
  * and the 32-byte legacy root.
  */
 export const SCITT_ROOT_OFFSET = BITCOIN_OP_RETURN_PREFIX_LEN + ROOT_LEN; // 36
+
+/**
+ * Offset of the root within the DEPLOYED 44-byte anchor-worker layout
+ * (`MAGIC || seq_start(4) || seq_end(4) || root`): after the prefix and the two
+ * 4-byte big-endian sequence bounds.
+ */
+export const ANCHOR_SEQ_ROOT_OFFSET = BITCOIN_OP_RETURN_PREFIX_LEN + 8; // 12
 
 /** Default public Bitcoin explorer API for the bonus witness check (spec §7.5). */
 export const DEFAULT_MEMPOOL_API = "https://mempool.space/api";
