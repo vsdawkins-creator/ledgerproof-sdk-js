@@ -3,12 +3,12 @@ name: Publish to npm (provenance)
 # Publishes @ledgerproof/sdk to npm WITH build provenance: a Sigstore attestation,
 # generated via GitHub OIDC, linking the tarball to this PUBLIC repo + commit + run.
 #
-# AUTH: an npm token (repo secret NPM_TOKEN). Pragmatic fallback while npm Trusted
-# Publishing (OIDC, tokenless) is finished. Once the trusted publisher is set for
-# @ledgerproof/sdk (org `vsdawkins-creator`, repo `ledgerproof-sdk-js`, workflow
-# `publish.yml`), delete the NODE_AUTH_TOKEN env below and revoke the token.
-# Provenance is independent of the auth method — it comes from id-token + the
-# public repo.
+# AUTH: npm Trusted Publishing (OIDC, TOKENLESS) — no npm token. The `id-token: write`
+# permission lets npm (>= 11.5.1) exchange a GitHub OIDC token for a short-lived
+# registry credential. Requires a one-time trusted-publisher entry on npmjs.com:
+#   package @ledgerproof/sdk · owner vsdawkins-creator · repo ledgerproof-sdk-js
+#   · workflow publish.yml · environment (none)
+# Provenance is independent of auth — it comes from id-token + the public repo.
 #
 # Run with dry_run = true first, then dry_run = false to actually publish.
 
@@ -46,8 +46,6 @@ jobs:
       - name: Publish with provenance
         if: ${{ inputs.dry_run == false }}
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Simulate publish (dry run — nothing is published)
         if: ${{ inputs.dry_run == true }}
         run: npm publish --access public --provenance --dry-run
